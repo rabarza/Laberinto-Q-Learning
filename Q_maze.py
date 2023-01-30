@@ -32,6 +32,7 @@ class Q_maze():
         self.actions = np.array([0, 1, 2, 3]) #{0:'izquierda', 1:'arriba', 2:'derecha', 3:'abajo'}
         self.times_actions = np.zeros((rewards.shape[0], rewards.shape[1], 4))#Se cuenta la cantidad de veces que se tomo una accion en cada estado
         self.q_table = None
+        self.steps = np.zeros(episodes)
 
     def chequear_estado_terminal(self, state):
         '''Devuelve True o False si un estado es terminal o no, respectivamente
@@ -163,7 +164,10 @@ class Q_maze():
         return s_row, s_column
 
     def train(self):
-        '''Resuelve el problema del laberinto usando el algoritmo Q-Learning'''
+        '''Resuelve el problema del laberinto usando el algoritmo Q-Learning
+        
+        '''
+
         episodes = self.episodes
         epsilon = self.epsilon
         alpha = self.alpha
@@ -174,8 +178,8 @@ class Q_maze():
 
         for episode in range(episodes):
 
-            state = self.estado_inicial(fixed=True)#self.estado_inicial(False) genera un estado inicial aleatorio
-
+            state = self.estado_inicial(fixed=True)#por defecto el estado inicial es state = [1,0]
+            
             while not self.chequear_estado_terminal(state):
 
                 action = self.select_action(state, self.method, epsilon)
@@ -189,6 +193,9 @@ class Q_maze():
                 self.q_table[state[0], state[1], action] = Q_new
 
                 state = next_state
+                self.steps[episode] += 1 # en cada iteracion aumenta la cantidad de pasos antes de llegar a un estado terminal.
+
+
         
         return self.q_table
 
@@ -213,6 +220,22 @@ class Q_maze():
             camino.append(state)
         return camino    
 
+    def plot_steps_per_episode(self):
+        '''
+        Grafica la cantidad de pasos que tardó cada episodio en llegar a un estado terminal.
+        '''
+        import matplotlib.pyplot as plt
+
+        plt.figure(dpi=100)
+        plt.plot(range(self.episodes),self.steps)
+        plt.title(self.game+'-'+self.method)
+        plt.xlabel('Episodes')
+        plt.ylabel('Steps')
+
+        plt.yticks(range(0,int(np.max(self.steps)),10))
+        plt.grid()
+        plt.show()
+        
 # Generacion de un ejemplo de matriz de recompensas (ver excel)
 rewards = np.ones((9,9))*-100
 rewards[1,0:6] = - 1
@@ -245,3 +268,7 @@ model_pit.train()
 
 print('Modelo Laberinto con fosas Entrenado!')
 print(f'El mejor camino para llegar a la meta comenzando desde {estado_inicio} es {model_pit.mejor_camino(estado_inicio)}\n')
+
+# Graficos de convergencia
+model_pit.plot_steps_per_episode()
+model_fire.plot_steps_per_episode()
