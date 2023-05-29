@@ -94,7 +94,7 @@ print(rewards)
 # print(f'El mejor camino para llegar a la meta comenzando desde {estado_inicio} es {model_pit.mejor_camino(estado_inicio)}\n')
 # model_pit.plot_steps_per_episode()
 
-model_fire = Q_maze(rewards, episodes = 1000, discount_rate = 1, alpha = 0.9, method = 'en-greedy', epsilon = 0.1, temperature=1, game='fire-walls', c = 5, d = 0.8) 
+model_fire = Q_maze(rewards, episodes = 1000, discount_rate = 1, alpha = 0.9, method = 'en-greedy', epsilon = 0.1, temperature=1, game='fire-walls', c = 0.2, d = 1) 
 model_fire.train()
 print('Modelo Laberinto con paredes de fuego Entrenado!')
 # print(f'El mejor camino para llegar a la meta comenzando desde {estado_inicio} es {model_fire.mejor_camino(estado_inicio)}\n')
@@ -104,7 +104,7 @@ model_fire.plot_steps_per_episode()
 # print(min(model_fire.steps))
 
 
-n_matrices = 10
+'''n_matrices = 10
 n_episodios = 500
 estado_inicio = [0, 0] # Cambiar estos valores si se quiere evaluar otro estado en el que el agente comience su recorrido. [1, 0]
 n_cols = 10
@@ -120,4 +120,4 @@ for maze in mazes:
 
 # Graficos de convergencia
 
-plot_steps_per_episode_comp(models)
+plot_steps_per_episode_comp(models)'''

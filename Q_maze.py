@@ -107,86 +107,115 @@ class Q_maze():
         `epsilon` -- solo se utiliza en el método epsilon-greedy (por defecto epsilon = 0).
 
         '''
-        match method:
+        def epsilon_greedy(self, state, epsilon):
+            greedy_action = np.argmax(self.q_table[state[0],state[1]])
+            explore_action = np.random.choice(self.actions)
 
-            case 'e-greedy':
-
-                greedy_action = np.argmax(self.q_table[state[0],state[1]])
-                explore_action = np.random.choice(self.actions)
-                num = np.random.random()
-
-                if num <= epsilon:
-                    return explore_action #No la mejor accion
-                else:
-                    return greedy_action #Mejor accion
+            num = np.random.random()
+            if num <= epsilon:
+                # Explorar
+                return explore_action
+            else:
+                # Explotar
+                return greedy_action
                 
-            case 'en-greedy':
+        def decreasing_epsilon_greedy(self, state, epoch):
+            K = len(self.actions)
+            c = self.c
+            d = self.d
+            n = epoch + 1
 
-                K = len(self.actions)
-                c = self.c
-                d = self.d
-                n = epoch + 1
-                greedy_action = np.argmax(self.q_table[state[0],state[1]])
-                explore_action = np.random.choice(self.actions)
-                epsilon_n = min(1, (c*K)/((d**2)*n))
+            greedy_action = np.argmax(self.q_table[state[0],state[1]])
+            explore_action = np.random.choice(self.actions)
+            
+            # Actualizar valor de la tasa epsilon_n decreciente
+            epsilon_n = min(1, (c * K) / ((d ** 2) * (n ** 0.5)))
 
-                num = np.random.random()
+            # Seleccionar acción
+            num = np.random.random()
+            if num <= epsilon_n:
+                # Explorar
+                return explore_action
+            else:
+                # Explotar
+                return greedy_action
+            
+        def softmax_exploration(self, state):
+            K = len(self.actions)
+            
+            # Incrementar cantidad de visitas al estado
+            self.times_states[state[0],state[1]]+=1
 
-                if num <= epsilon_n:
-                    return explore_action #No la mejor accion
-                else:
-                    return greedy_action #Mejor accion
-            case 'UCB1':
+            # Actualizar el valor de temperatura
+            # tau = 1/np.log(self.episodes-self.times_states[state[0],state[1]])
+            tau = self.tau
 
-                times_actions = self.times_actions[state[0], state[1]]#Contiene la cantidad de veces que se ha tomado cada accion en el estado indicado. (es un arreglo)
+            Qs = np.array([self.q_table[state[0],state[1], i] for i in range(K)])
 
-                number_not_choosen_actions = np.count_nonzero(times_actions==0) #Cuenta la cantidad de acciones que nunca se han escogido
+            # Generar distribucion de probabilidad exponencial 
+            probabilities = np.array([np.exp(Qs[i]/tau)/np.sum(np.exp(Qs/tau)) for i in range(K)]) 
+            
+            # Muestrear acción de acuerdo a la distribución generada
+            action = random.choices(list(self.actions), weights=list(probabilities))[0]
+            return action
+            
+        def upper_confidence_bound(self, state, c = 2):
+            # Contador de visitas para cada accion en el estado actual
+            times_actions = self.times_actions[state[0], state[1]]
+            
+            # Contar la cantidad de acciones que no han sido escogidas en el estado actual
+            number_not_chosen_actions = np.count_nonzero(times_actions == 0) 
 
-                if (number_not_choosen_actions > 0):
-                    action = np.argwhere(times_actions==0).flatten()[0] #Devuelve la primera accion que nunca se ha usado   de la lista de acciones en un estado determinado, podria tambien escogerse aleatoriamente. ### Hablarlo   con el profe.
-                    self.times_actions[state[0],state[1],action] +=1
+            if (number_not_chosen_actions > 0):
+                # Escoger una acción no visitada anteriormente
+                action = np.argwhere( times_actions == 0 ).flatten()[0]
+                
+                # Incrementar el contador de visitas para la acción en el estado actual
+                self.times_actions[state[0], state[1], action] +=1
 
-                    return action
-
-                else:
-
-                    # qa = self.q_table[state[0],state[1], 0]
-                    # qb = self.q_table[state[0],state[1], 1]
-                    # qc = self.q_table[state[0],state[1], 2]
-                    # qd = self.q_table[state[0],state[1], 3]
-
-                    q =[self.q_table[state[0],state[1], i] for i in range(len(self.actions))]
-
-                    ucb = [q[i]+ np.sqrt(2*np.log(self.episodes)/(times_actions[0])) for i in range(len(self.actions))]
-
-                    action = np.argmax(ucb)
-
-                    self.times_actions[state[0],state[1],action] +=1 #Se suma una vez mas el numero de veces que la accion  asignada 
-
-                    return action
-
-            case 'exp3': #Gambling in a Ridged Casino
-                K = len(self.actions)
-                w = self.action_weights
-                gamma = self.discount_rate
-
-                probs = [(1-gamma)*w[i]/np.sum(w) + gamma/K for i in range(K)] #Probabilidad de escoger cada accion
-                self.action_prob = probs.copy()
-                print('w: ', w)
-                action = random.choices(list(self.actions), weights=probs)[0] #Selecciono la accion segun dist uniforme
+                # Devolver acción
                 return action
+
+            else:
+                # Calcular el valor de los estimadores de q utilizando la estrategia UCB
+                q = [ self.q_table[state[0], state[1], i] for i in range(len(self.actions)) ]
+                ucb = [ q[i] + np.sqrt(c * np.log(self.episodes) / (times_actions[0])) for i in range(len(self.actions)) ]
+
+                # Seleccionar acción
+                action = np.argmax(ucb)
+
+                # Incrementar el contador de visitas para la acción en el estado actual
+                self.times_actions[state[0], state[1], action] += 1
+
+                # Devolver acción
+                return action
+
+        def exp3_action_selection(self, state):
+            K = len(self.actions)
+            w = self.action_weights
+            gamma = self.discount_rate
+            probs = [(1-gamma)*w[i]/np.sum(w) + gamma/K for i in range(K)] #Probabilidad de escoger cada accion
+            self.action_prob = probs.copy()
+            print('w: ', w)
+            action = random.choices(list(self.actions), weights=probs)[0] #Selecciono la accion segun dist uniforme
+            return action
+
+        match method:
+            case 'e-greedy':
+                return epsilon_greedy(self, state, epsilon)
+
+            case 'en-greedy':
+                return decreasing_epsilon_greedy(self, epsilon, epoch)
+                
+            case 'UCB1':
+                return upper_confidence_bound(self, state)
 
             case 'softmax':
-                K = len(self.actions)
-                self.times_states[state[0],state[1]]+=1 #Cada vez que llego a un estado aumento la cantidad de veces en ese estado, para luego disminuir la temperatura
-                # tau = 1/np.log(self.episodes-self.times_states[state[0],state[1]])
-                tau = self.tau
-                Qs = np.array([self.q_table[state[0],state[1], i] for i in range(K)])#valor estado-accion para cada accion
-
-                probabilities = np.array([np.exp(Qs[i]/tau)/np.sum(np.exp(Qs/tau)) for i in range(K)]) #Probabilidad de     escoger cada accion
-                action = random.choices(list(self.actions), weights=list(probabilities))[0] #Selecciono la accion segun dist  uniforme
-                return action
-
+                return softmax_exploration(self, state)
+            
+            case 'exp3': #Gambling in a Ridged Casino
+                return exp3_action_selection(self, state)
+            
             case _:
                 raise ValueError('El método seleccionado debe ser valido (como e-greedy, en-greedy, UCB1, softmax)')
 
@@ -243,12 +272,12 @@ class Q_maze():
         gamma = self.discount_rate
         rewards = self.rewards
 
-        #Inicializar Q_table (all values to zero)
+        # Inicializar de valores Q: Q_table (all values to zero)
         self.q_table = np.zeros((rewards.shape[0], rewards.shape[1], 4))
 
         for episode in range(episodes):
             
-            #Select Randomly Initial State (fixed parte de un estado fijo)
+            #Seleccionar un estado inicial (fixed = False, selecciona un estado aleatorio)
             state = self.estado_inicial(fixed = True)
             
             while not self.chequear_estado_terminal(state):
@@ -256,21 +285,21 @@ class Q_maze():
                 #Se Realiza la trancisión (action, next_state, reward)
                 action = self.select_action(state, self.method, epsilon, episode)
                 next_state = self.next_state(state, action)
-                reward = rewards[next_state[0], next_state[1]]# La recompensa depende del par estado/accion (transicion).
+                reward = rewards[next_state[0], next_state[1]]
 
-                self.actualizar_peso_exp3(reward, action) #SOLO EXP3: ACtualiza el peso de cada accion.
+                # self.actualizar_peso_exp3(reward, action) # SOLO EXP3: Actualiza el peso de cada accion.
                 
                 #Actualización valores Q_table
                 Q_old = self.q_table[state[0], state[1], action]
                 Q_new = Q_old * (1-alpha) + alpha * (reward + gamma * np.max(self.q_table[next_state[0], next_state[1]]))
                 self.q_table[state[0], state[1], action] = Q_new
 
-                #Go to the next State
+                # Ir al estado siguiente
                 state = next_state
 
-                #Aumento la cantidad de steps
+                # Aumentar la cantidad de pasos (steps) en el episodio
                 self.steps[episode] += 1 #En cada iteracion aumenta la cantidad de pasos antes de llegar a un estado terminal.
-        
+
         return self.q_table
 
     def mejor_camino(self, state):
@@ -309,3 +338,31 @@ class Q_maze():
         # plt.yticks(range(0,int(np.max(self.steps)),10))
         plt.grid()
         plt.show()
+
+
+# Generacion de un ejemplo de matriz de recompensas (ver excel)
+rewards = np.ones((9,9))*-100
+rewards[1,0:6] = - 1
+rewards[2,3] = -1
+rewards[3,1:4] = -1
+rewards[4,1] = -1
+rewards[5,1:8] = -1
+rewards[6,1] = -1
+rewards[7,0:2] = -1
+rewards[7,3:6] = -1
+rewards[3:8,5] = -1
+rewards[1:8,7] = -1
+rewards[2,8] = 500
+print(rewards)
+
+estado_inicio = [1, 0] # Cambiar estos valores si se quiere evaluar otro estado en el que el agente comience su recorrido.
+
+n_iter = 200
+
+#Laberinto con paredes de fuego. Notar que se esta utilizando el metodo UCB1, y no e-greedy. Cambiar el parametro a method = 'e-greedy' si lo desea.
+model_fire = Q_maze(rewards, episodes = n_iter, discount_rate = 0.9, alpha = 0.9, method = 'softmax', epsilon = 0.1, temperature=1, game='fire-walls') 
+model_fire.train()
+
+print('Modelo Laberinto con paredes de fuego Entrenado!')
+print(f'El mejor camino para llegar a la meta comenzando desde {estado_inicio} es {model_fire.mejor_camino(estado_inicio)}\n')
+model_fire.plot_steps_per_episode()
