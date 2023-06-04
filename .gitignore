@@ -1,0 +1,5 @@
+*.xlsx
+*.pgf
+ej.ipynb
+pymaze.py
+__pycache__

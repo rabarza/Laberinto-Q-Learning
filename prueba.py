@@ -104,7 +104,7 @@ model_fire.plot_steps_per_episode()
 # print(min(model_fire.steps))
 
 
-'''n_matrices = 10
+n_matrices = 10
 n_episodios = 500
 estado_inicio = [0, 0] # Cambiar estos valores si se quiere evaluar otro estado en el que el agente comience su recorrido. [1, 0]
 n_cols = 10
@@ -120,4 +120,4 @@ for maze in mazes:
 
 # Graficos de convergencia
 
-plot_steps_per_episode_comp(models)'''
+plot_steps_per_episode_comp(models)

@@ -1,1 +1,1 @@
-fire
+(n_cols, n_rows)
