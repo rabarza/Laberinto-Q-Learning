@@ -1,5 +1,8 @@
 *.xlsx
 *.pgf
+.vscode
+__pycache__
+.ipynb_checkpoints
 ej.ipynb
 pymaze.py
-__pycache__
+tests.ipynb

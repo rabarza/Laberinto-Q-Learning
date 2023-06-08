@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 import random
 import numpy as np
 
@@ -23,7 +24,7 @@ class Q_maze():
     `game` -- tipo de laberinto compuesto por fosas, o por paredes de fuego (pit-walls o fire-walls, respectivamente).
 
     '''
-    def __init__(self, rewards, episodes=1000, discount_rate=0.9, alpha=0.2, method = 'e-greedy', epsilon = 0.1, temperature = 1,  game = 'pit-walls', c = 2, d = 0.8, expression='t^2'):
+    def __init__(self, rewards, episodes=1000, discount_rate=0.9, alpha=0.2, method = 'e-greedy', epsilon = 0.1, temperature = 1, game = 'pit-walls', c = 2, d = 0.8, expression='t^2'):
 
         self.episodes = episodes
         self.alpha = alpha
@@ -52,11 +53,9 @@ class Q_maze():
         # exp3
         self.expression = expression
 
-        self.q_table = self.q_table = np.zeros((rewards.shape[0], rewards.shape[1], 4)) # Inicializar valores de q_table a cero
-
         self.steps = np.zeros(episodes)
 
-    def chequear_estado_terminal(self, state):
+    def estado_terminal(self, state):
         '''Devuelve True o False si un estado es terminal o no, respectivamente
         
         #### Parametros:
@@ -86,21 +85,53 @@ class Q_maze():
         #### Parámetros:
         
         `fixed` -- True o False, indica si se parte de un estado fijo o aleatorio, respectivamente.
+        Por defecto se comienza a partir de la celda [1, 0]
 
         '''
 
         if not fixed:
+            # Generar una posicion aleatoria dentro de la matriz de recompensas
             dims = self.rewards.shape
-            estado = np.random.randint(dims[0]), np.random.randint(dims[1]) #Genera una posicion aleatoria dentro de la matriz de recompensas
-
-            while self.chequear_estado_terminal(estado):#Mientras la ubicacion sea un estado terminal, genero una nueva.
+            estado = np.random.randint(dims[0]), np.random.randint(dims[1]) 
+            
+            # Generar una nueva ubicación mientras la ubicacion sea un estado terminal.
+            while self.estado_terminal(estado):
                 estado = np.random.randint(dims[0]), np.random.randint(dims[1])
             return estado
         else:
             return estado
 
+    def next_state(self, state, action):
+        '''
+        Devuelve en una lista los valores del estado siguiente luego de realizar una acción a partir de un estado previo.
+
+
+        #### Parámetros:
+
+        `state` -- estado previo a realizar la transicion.
+
+        `action` -- accion que se toma para realizar la transicion, puede ser arriba (1), abajo (3), izquierda (0), o derecha (4).
+        
+        '''
+        dims = self.rewards.shape
+        s_row, s_column = state
+        if action == 0 and s_column > 0: #Se mueve hacia la izquierda
+            s_column -= 1
+
+        elif action == 1 and s_row > 0: #Se mueve hacia arriba
+            s_row -= 1
+
+        elif action == 2 and s_column + 1 < dims[1]: #Se mueve hacia la derecha
+            s_column += 1
+
+        elif action == 3 and s_row + 1 < dims[0]: #Se mueve hacia abajo
+            s_row += 1
+
+        self.times_states[s_row,s_column] +=1
+        return s_row, s_column
+
     def select_action(self, state, method, epsilon = float(0), epoch = 1):
-        '''Devuelve una acción de acuerdo al metodo escogido (e-greedy o UCB1)
+        '''Devuelve una acción de acuerdo a la estrategia de selección de acción.
         
         #### Parámetros:
 
@@ -112,7 +143,7 @@ class Q_maze():
 
         '''
         def epsilon_greedy(self, state, epsilon):
-            greedy_action = np.argmax(self.q_table[state[0],state[1]])
+            greedy_action = np.argmax(self.q_table[state[0], state[1]])
             explore_action = np.random.choice(self.actions)
 
             num = np.random.random()
@@ -154,12 +185,12 @@ class Q_maze():
             # Actualizar el valor de temperatura
             tau = self.tau
 
-            Qs = self.q_table[state[0], state[1], :]
+            q_state = self.q_table[state[0], state[1], :]
 
             if normalize:
-                exp_values = np.exp((Qs - np.max(Qs)) * tau)
+                exp_values = np.exp((q_state - np.max(q_state)) * tau)
             else:
-                exp_values = np.exp(Qs * tau)
+                exp_values = np.exp(q_state * tau)
 
             # Generar distribucion de probabilidad exponencial 
             probabilities = exp_values /  np.sum(exp_values) 
@@ -180,15 +211,17 @@ class Q_maze():
                 action = np.argwhere( times_actions == 0 ).flatten()[0]
                 
                 # Incrementar el contador de visitas para la acción en el estado actual
-                self.times_actions[state[0], state[1], action] +=1
+                self.times_actions[state[0], state[1], action] += 1
 
                 # Devolver acción
                 return action
 
             else:
+                # Obtener los valores de q para cada acción a partir del estado s
+                q_state = self.q_table[state[0], state[1], :]
+
                 # Calcular el valor de los estimadores de q utilizando la estrategia UCB
-                q = [ self.q_table[state[0], state[1], i] for i in range(len(self.actions)) ]
-                ucb = [ q[i] + np.sqrt(c * np.log(self.episodes) / times_actions[0]) for i in range(len(self.actions)) ]
+                ucb =  q_state + np.sqrt( c * np.log(self.episodes) / times_actions[0] )
 
                 # Seleccionar acción
                 action = np.argmax(ucb)
@@ -223,17 +256,15 @@ class Q_maze():
                     eta = np.sqrt(t)
                 case _:
                     raise ValueError("Expresión inválida para eta.")
-
-            # print(t, eta)
             
-            # Obtener valores de Q en el estado s para todas las acciones disponibles desde s
-            Qs = self.q_table[state[0], state[1], :]
+            # Obtener los valores de q para cada acción a partir del estado s
+            q_state = self.q_table[state[0], state[1], :]
 
             # Valores exponenciales de Q(s,a)
             if normalize:
-                exp_values = np.exp((Qs - np.max(Qs)) * eta)
+                exp_values = np.exp((q_state - np.max(q_state)) * eta)
             else:
-                exp_values = np.exp(Qs * eta)
+                exp_values = np.exp(q_state * eta)
 
             # Generar distribucion de probabilidad exponencial 
             probabilities = exp_values /  np.sum(exp_values) 
@@ -262,36 +293,6 @@ class Q_maze():
             case _:
                 raise ValueError('El método seleccionado debe ser valido (como e-greedy, en-greedy, UCB1, softmax)')
             
-
-    def next_state(self, state, action):
-        '''
-        Devuelve en una lista los valores del estado siguiente luego de realizar una acción a partir de un estado previo.
-
-
-        #### Parámetros:
-
-        `state` -- estado previo a realizar la transicion.
-
-        `action` -- accion que se toma para realizar la transicion, puede ser arriba (1), abajo (3), izquierda (0), o derecha (4).
-        
-        '''
-        dims = self.rewards.shape
-        s_row, s_column = state
-        if action == 0 and s_column > 0: #Se mueve hacia la izquierda
-            s_column -= 1
-
-        elif action == 1 and s_row > 0: #Se mueve hacia arriba
-            s_row -= 1
-
-        elif action == 2 and s_column + 1 < dims[1]: #Se mueve hacia la derecha
-            s_column += 1
-
-        elif action == 3 and s_row + 1 < dims[0]: #Se mueve hacia abajo
-            s_row += 1
-
-        self.times_states[s_row,s_column] +=1
-        return s_row, s_column
-
     def train(self):
         '''
         Resuelve el problema del laberinto usando el algoritmo Q-Learning
@@ -308,19 +309,17 @@ class Q_maze():
 
         for episode in range(episodes):
             
-            #Seleccionar un estado inicial (fixed = False, selecciona un estado aleatorio)
+            # seleccionar un estado inicial (fixed = False, selecciona un estado aleatorio)
             state = self.estado_inicial(fixed = True)
             
-            while not self.chequear_estado_terminal(state):
+            while not self.estado_terminal(state):
 
-                #Se Realiza la trancisión (action, next_state, reward)
+                # Se realiza la transición (action, next_state, reward)
                 action = self.select_action(state, self.method, epsilon, episode)
                 next_state = self.next_state(state, action)
                 reward = rewards[next_state[0], next_state[1]]
-
-                # self.actualizar_peso_exp3(reward, action) # SOLO EXP3: Actualiza el peso de cada accion.
                 
-                #Actualización valores Q_table
+                # Actualizar valores Q_table
                 Q_old = self.q_table[state[0], state[1], action]
                 Q_new = Q_old * (1-alpha) + alpha * (reward + gamma * np.max(self.q_table[next_state[0], next_state[1]]))
                 self.q_table[state[0], state[1], action] = Q_new
@@ -328,8 +327,8 @@ class Q_maze():
                 # Ir al estado siguiente
                 state = next_state
 
-                # Aumentar la cantidad de pasos (steps) en el episodio
-                self.steps[episode] += 1 #En cada iteracion aumenta la cantidad de pasos antes de llegar a un estado terminal.
+                # Aumentar la cantidad de pasos del episodio
+                self.steps[episode] += 1
 
         # return self.q_table
 
@@ -341,13 +340,13 @@ class Q_maze():
         `state` -- estado (debe ser una lista que contenga las cordenadas x, y. ej: [x, y])
         '''
         camino = []
-        if self.chequear_estado_terminal(state):
+        if self.estado_terminal(state):
             return camino
 
         else:
             camino.append(state)
 
-        while not self.chequear_estado_terminal(state):
+        while not self.estado_terminal(state):
             action = self.select_action(state,'e-greedy') #Escojo un epsilon = 0 para que siempre escoja la mejor accion, por defecto es 0, por lo tanto no es necesario indicarlo
             state = self.next_state(state, action)
             camino.append(state)
@@ -369,7 +368,8 @@ class Q_maze():
         plt.grid()
         plt.show()
 
-# Comparación de modelos
+
+#=========================================================== Comparación de modelos ===========================================================
 def plot_steps_per_episode_comp(lista, dpi = 50):
     '''
     Realiza una comparación gráfica de la cantidad de pasos que tardó cada agente en un episodio en llegar a un estado terminal.
@@ -397,15 +397,19 @@ def plot_steps_per_episode_comp(lista, dpi = 50):
     plt.show()
 
 def generate_maze(rows, cols, start, end):
-    maze = [[-100] * cols for _ in range(rows)]  # Inicializar todas las celdas como paredes (-100)
+    # Inicializar todas las celdas como paredes (-100)
+    maze = [[-100] * cols for _ in range(rows)]  
 
     # Definir punto de inicio y meta
     maze[start[0]][start[1]] = -1
-    maze[end[0]][end[1]] = 500
+    # maze[end[0]][end[1]] = 500 
 
-    stack = [start]  # Utilizaremos una pila para rastrear las celdas visitadas
-    visited = set([start])  # Conjunto para almacenar las celdas visitadas
-
+    # Utilizaremos un stack para rastrear las celdas visitadas
+    stack = [start]  
+    # Conjunto para almacenar las celdas visitadas
+    visited = set([start])  
+    
+    # Mientras el stack no esté vacío
     while stack:
         current_row, current_col = stack[-1]
 
@@ -439,7 +443,12 @@ def generate_maze(rows, cols, start, end):
             # No hay celdas vecinas no visitadas, retroceder
             stack.pop()
     
+    # Definir meta
+    maze[end[0]][end[1]] = 500 
+
+    
     return np.matrix(maze)
+
 
 def plot_maze(maze, start_point, end_point, path = []):
 
@@ -450,7 +459,7 @@ def plot_maze(maze, start_point, end_point, path = []):
     fig, ax = plt.subplots()
 
     # Configurar el tamaño de la figura en función del tamaño del laberinto
-    fig.set_size_inches(cols, rows)
+    fig.set_size_inches(cols/2, rows/2)
 
     # Configurar límites del eje
     ax.set_xlim(0, cols)
@@ -463,23 +472,23 @@ def plot_maze(maze, start_point, end_point, path = []):
     for row in range(rows):
         for col in range(cols):
             if maze[row,col] == -100:
-                rect = plt.Rectangle((col, rows - row - 1), 1, 1, facecolor="black")
+                rect = Rectangle((col, rows - row - 1), 1, 1, facecolor="black")
                 ax.add_patch(rect)
 
-    #Dibujar el camino
+    # Dibujar el camino
     if (path):
         for cell in path:
-            path_rect = plt.Rectangle((cell[1], rows - cell[0] - 1), 1, 1, facecolor="palegreen")
+            path_rect = Rectangle((cell[1], rows - cell[0] - 1), 1, 1, facecolor="palegreen")
             ax.add_patch(path_rect)
             
     # Dibujar el punto de inicio
     start_row, start_col = start_point
-    start_rect = plt.Rectangle((start_col, rows - start_row - 1), 1, 1, facecolor="red")
+    start_rect = Rectangle((start_col, rows - start_row - 1), 1, 1, facecolor="red")
     ax.add_patch(start_rect)
 
     # Dibujar la meta
     end_row, end_col = end_point
-    end_rect = plt.Rectangle((end_col, rows - end_row - 1), 1, 1, facecolor="lime")
+    end_rect = Rectangle((end_col, rows - end_row - 1), 1, 1, facecolor="lime")
     ax.add_patch(end_rect)
 
     # Mostrar la figura
